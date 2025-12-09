@@ -13,24 +13,24 @@ connectDB();
 
 const app = express();
 
-// middlewares
+// ---------- Stripe webhook MUST be the first route if using express.json() later ----------
+const paymentController = require('./controllers/payment.controller');
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
+
+// ---------- Middlewares ----------
 app.use(morgan('dev'));
 app.use(helmet());
-app.use(cors({ origin: process.env.FRONTEND_URL || true, credentials: true }));
+app.use(cors({ origin: process.env.FRONTEND_URL || '*', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
-// routes
+// ---------- Routes ----------
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/services', require('./routes/service.routes'));
 app.use('/api/bookings', require('./routes/booking.routes'));
 app.use('/api/payments', require('./routes/payment.routes'));
 app.use('/api/admin', require('./routes/admin.routes'));
 app.use('/api/advanced', require('./routes/advanced.routes'));
-
-// stripe webhook (raw body)
-const paymentController = require('./controllers/payment.controller');
-app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
 
 // health
 app.get('/', (req, res) => res.json({ message: 'StyleDecor API is running' }));
