@@ -1,22 +1,33 @@
-// src/config/database.js
 const mongoose = require('mongoose');
-const logger = require('../utils/logger');
 
 const connectDB = async () => {
-  const uri = process.env.MONGO_URI;
-  if (!uri) {
-    logger.error('MONGO_URI not set in .env');
-    process.exit(1);
-  }
   try {
-    await mongoose.connect(uri, {
-      dbName: 'styledecor',
-      useNewUrlParser: true,
-      useUnifiedTopology: true
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      // Mongoose 6+ no longer needs these options:
+      // useNewUrlParser: true,
+      // useUnifiedTopology: true,
     });
-    logger.info('MongoDB connected');
-  } catch (err) {
-    logger.error('MongoDB connection error:', err);
+
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+
+    // Handle connection events
+    mongoose.connection.on('error', (err) => {
+      console.error('❌ MongoDB connection error:', err);
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      console.warn('⚠️ MongoDB disconnected');
+    });
+
+    // Graceful shutdown
+    process.on('SIGINT', async () => {
+      await mongoose.connection.close();
+      console.log('MongoDB connection closed through app termination');
+      process.exit(0);
+    });
+
+  } catch (error) {
+    console.error('❌ MongoDB connection failed:', error.message);
     process.exit(1);
   }
 };
