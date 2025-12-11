@@ -1,36 +1,69 @@
-// src/models/User.js
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  firebaseUid: { type: String, unique: true, sparse: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  name: { type: String },
-  displayName: { type: String },
-  phoneNumber: { type: String, sparse: true },
-  photoURL: { type: String },
-  role: { type: String, enum: ['user', 'decorator', 'admin'], default: 'user' },
-  profile: {
-    address: { type: String },
-    district: { type: String },
-    thana: { type: String },
-    bio: { type: String }
+  firebaseUid: {
+    type: String,
+    required: [true, 'Firebase UID is required'],
+    unique: true,
+    index: true
   },
-  specialties: { type: [String], default: [] },
-  rating: { type: Number, default: 4.5 },
-  location: {
-    type: { type: String, enum: ['Point'], default: 'Point' },
-    coordinates: { type: [Number], default: undefined }
+  email: {
+    type: String,
+    required: [true, 'Email is required'],
+    unique: true,
+    lowercase: true,
+    trim: true,
+    match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please provide a valid email']
   },
-  currentLoad: { type: Number, default: 0 },
-  approved: { type: Boolean, default: false },
-  isActive: { type: Boolean, default: true },
-  isVerified: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date }
+  displayName: {
+    type: String,
+    required: [true, 'Display name is required'],
+    trim: true
+  },
+  photoURL: {
+    type: String,
+    default: null
+  },
+  role: {
+    type: String,
+    enum: {
+      values: ['user', 'decorator', 'admin'],
+      message: '{VALUE} is not a valid role'
+    },
+    default: 'user' // Role assigned by admin later
+  },
+  phoneNumber: {
+    type: String,
+    trim: true
+  },
+  address: {
+    type: String,
+    trim: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  lastLogin: {
+    type: Date,
+    default: Date.now
+  }
+}, {
+  timestamps: true
 });
 
-userSchema.index({ email: 1 });
+// Indexes for performance
 userSchema.index({ firebaseUid: 1 });
-userSchema.index({ location: '2dsphere' });
+userSchema.index({ email: 1 });
+userSchema.index({ role: 1 });
 
-module.exports = require('mongoose').model('User', userSchema);
+// Method to safely return user data
+userSchema.methods.toJSON = function() {
+  const user = this.toObject();
+  delete user.__v;
+  return user;
+};
+
+const User = mongoose.model('User', userSchema);
+
+module.exports = User;
