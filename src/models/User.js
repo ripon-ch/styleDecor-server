@@ -1,10 +1,11 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
-const userSchema = new mongoose.Schema({
+const UserSchema = new mongoose.Schema({
   firebaseUid: {
     type: String,
-    required: [true, 'Firebase UID is required'],
     unique: true,
+    sparse: true,
     index: true
   },
   email: {
@@ -13,38 +14,78 @@ const userSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
     trim: true,
-    match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please provide a valid email']
+    match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email']
   },
-  displayName: {
+  password: {
     type: String,
-    required: [true, 'Display name is required'],
+    minlength: [6, 'Password must be at least 6 characters'],
+    select: false
+  },
+  fullName: {
+    type: String,
+    required: [true, 'Full name is required'],
     trim: true
   },
-  photoURL: {
-    type: String,
-    default: null
-  },
-  role: {
-    type: String,
-    enum: {
-      values: ['user', 'decorator', 'admin'],
-      message: '{VALUE} is not a valid role'
-    },
-    default: 'user' // Role assigned by admin later
-  },
-  phoneNumber: {
+  phone: {
     type: String,
     trim: true
   },
   address: {
+    street: String,
+    city: String,
+    district: String,
+    thana: String,
+    postalCode: String
+  },
+  role: {
     type: String,
-    trim: true
+    enum: ['customer', 'decorator', 'admin'],
+    default: 'customer'
+  },
+  avatarUrl: {
+    type: String,
+    default: null
   },
   isActive: {
     type: Boolean,
     default: true
   },
-  lastLogin: {
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  bio: {
+    type: String,
+    maxlength: 1000
+  },
+  experienceYears: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  rating: {
+    average: { type: Number, default: 0, min: 0, max: 5 },
+    count: { type: Number, default: 0 }
+  },
+  totalJobs: {
+    type: Number,
+    default: 0
+  },
+  refreshToken: {
+    type: String,
+    select: false
+  },
+  passwordResetToken: String,
+  passwordResetExpires: Date,
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   }
@@ -52,18 +93,30 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for performance
-userSchema.index({ firebaseUid: 1 });
-userSchema.index({ email: 1 });
-userSchema.index({ role: 1 });
+// Indexes
+UserSchema.index({ email: 1, role: 1 });
+UserSchema.index({ firebaseUid: 1 });
+UserSchema.index({ 'address.district': 1 });
 
-// Method to safely return user data
-userSchema.methods.toJSON = function() {
-  const user = this.toObject();
-  delete user.__v;
-  return user;
+// Hash password before saving
+UserSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  
+  if (this.password) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
+  next();
+});
+
+// Compare password method
+UserSchema.methods.comparePassword = async function(candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
-const User = mongoose.model('User', userSchema);
+// Update timestamp
+UserSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
 
-module.exports = User;
+module.exports = mongoose.model('User', UserSchema);

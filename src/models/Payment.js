@@ -1,60 +1,59 @@
 const mongoose = require('mongoose');
 
-const paymentSchema = new mongoose.Schema({
+const PaymentSchema = new mongoose.Schema({
+  transactionId: {
+    type: String,
+    required: true,
+    unique: true
+  },
   bookingId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Booking',
-    required: [true, 'Booking ID is required'],
-    unique: true
+    required: true
   },
   customerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Customer ID is required']
+    required: true
   },
   amount: {
     type: Number,
-    required: [true, 'Amount is required'],
-    min: [0, 'Amount cannot be negative']
+    required: true,
+    min: 0
+  },
+  currency: {
+    type: String,
+    default: 'USD'
   },
   paymentMethod: {
     type: String,
-    enum: {
-      values: ['stripe', 'cash', 'bank_transfer'],
-      message: '{VALUE} is not a valid payment method'
-    },
+    enum: ['stripe', 'card', 'bkash', 'nagad', 'bank', 'cash'],
     default: 'stripe'
   },
-  paymentStatus: {
+  stripePaymentIntentId: String,
+  stripeSessionId: String,
+  status: {
     type: String,
-    enum: {
-      values: ['pending', 'paid', 'failed', 'refunded'],
-      message: '{VALUE} is not a valid payment status'
-    },
+    enum: ['pending', 'succeeded', 'paid', 'failed', 'refunded'],
     default: 'pending'
   },
-  stripePaymentId: {
-    type: String,
-    default: null
-  },
-  stripeSessionId: {
-    type: String,
-    default: null
-  },
-  paidAt: {
+  metadata: mongoose.Schema.Types.Mixed,
+  paidAt: Date,
+  createdAt: {
     type: Date,
-    default: null
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: true
 });
 
-// Indexes for performance
-paymentSchema.index({ bookingId: 1 }, { unique: true });
-paymentSchema.index({ customerId: 1 });
-paymentSchema.index({ paymentStatus: 1 });
-paymentSchema.index({ stripePaymentId: 1 });
+// Indexes
+PaymentSchema.index({ bookingId: 1 });
+PaymentSchema.index({ customerId: 1, status: 1 });
+PaymentSchema.index({ transactionId: 1 }, { unique: true });
 
-const Payment = mongoose.model('Payment', paymentSchema);
-
-module.exports = Payment;
+module.exports = mongoose.model('Payment', PaymentSchema);

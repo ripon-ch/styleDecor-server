@@ -1,10 +1,14 @@
 const mongoose = require('mongoose');
 
-const serviceSchema = new mongoose.Schema({
-  service_name: {
+const ServiceSchema = new mongoose.Schema({
+  serviceName: {
     type: String,
     required: [true, 'Service name is required'],
     trim: true
+  },
+  description: {
+    type: String,
+    required: [true, 'Description is required']
   },
   cost: {
     type: Number,
@@ -14,48 +18,60 @@ const serviceSchema = new mongoose.Schema({
   unit: {
     type: String,
     required: [true, 'Unit is required'],
-    enum: {
-      values: ['per sq-ft', 'per floor', 'per meter', 'package', 'hourly'],
-      message: '{VALUE} is not a valid unit'
-    }
+    enum: ['package', 'per sq-ft', 'hourly', 'per item', 'per floor', 'per event']
   },
-  service_category: {
+  serviceCategory: {
     type: String,
-    required: [true, 'Service category is required'],
-    enum: {
-      values: ['home', 'wedding', 'office', 'seminar', 'meeting', 'event', 'outdoor'],
-      message: '{VALUE} is not a valid category'
-    }
-  },
-  description: {
-    type: String,
-    required: [true, 'Description is required']
-  },
-  images: [{
-    type: String,
-    required: true
-  }],
-  createdByEmail: {
-    type: String,
-    required: [true, 'Creator email is required'],
-    lowercase: true,
-    trim: true
+    required: [true, 'Category is required'],
+    enum: ['home', 'wedding', 'office', 'event', 'outdoor']
   },
   isActive: {
     type: Boolean,
     default: true
+  },
+  images: [{
+    imageUrl: {
+      type: String,
+      required: true
+    },
+    altText: {
+      type: String,
+      required: true
+    },
+    isPrimary: {
+      type: Boolean,
+      default: false
+    },
+    displayOrder: {
+      type: Number,
+      default: 0
+    },
+    publicId: String
+  }],
+  features: [String],
+  rating: {
+    average: { type: Number, default: 0, min: 0, max: 5 },
+    count: { type: Number, default: 0 }
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: true
 });
 
-// Indexes for performance and search
-serviceSchema.index({ service_category: 1 });
-serviceSchema.index({ isActive: 1 });
-serviceSchema.index({ cost: 1 });
-serviceSchema.index({ service_name: 'text', description: 'text' }); // Full-text search
-serviceSchema.index({ createdByEmail: 1 });
+// Indexes
+ServiceSchema.index({ serviceCategory: 1, isActive: 1 });
+ServiceSchema.index({ cost: 1 });
+ServiceSchema.index({ serviceName: 'text', description: 'text' });
 
-const Service = mongoose.model('Service', serviceSchema);
-
-module.exports = Service;
+module.exports = mongoose.model('Service', ServiceSchema);

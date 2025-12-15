@@ -1,77 +1,99 @@
 const mongoose = require('mongoose');
 
-const reviewSchema = new mongoose.Schema({
+const ReviewSchema = new mongoose.Schema({
   bookingId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Booking',
-    required: [true, 'Booking ID is required'],
+    required: true,
     unique: true
+  },
+  serviceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Service',
+    required: true
   },
   customerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Customer ID is required']
+    required: true
   },
   decoratorId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Decorator ID is required']
+    required: true
   },
   rating: {
     type: Number,
     required: [true, 'Rating is required'],
-    min: [1, 'Rating must be at least 1'],
-    max: [5, 'Rating cannot exceed 5']
+    min: 1,
+    max: 5
   },
   comment: {
     type: String,
-    trim: true,
-    maxlength: [500, 'Comment cannot exceed 500 characters']
+    maxlength: 500
+  },
+  images: [String],
+  createdAt: {
+    type: Date,
+    default: Date.now
   }
 }, {
-  timestamps: true
+  timestamps: false
 });
 
-// Indexes for performance
-reviewSchema.index({ bookingId: 1 }, { unique: true });
-reviewSchema.index({ decoratorId: 1 });
-reviewSchema.index({ customerId: 1 });
-reviewSchema.index({ rating: 1 });
+// Indexes
+ReviewSchema.index({ bookingId: 1 }, { unique: true });
+ReviewSchema.index({ serviceId: 1, rating: -1 });
+ReviewSchema.index({ decoratorId: 1 });
 
-// Auto-update decorator profile rating after saving review
-reviewSchema.post('save', async function() {
-  const DecoratorProfile = require('./DecoratorProfile');
+// Update service and decorator ratings after review is saved
+ReviewSchema.post('save', async function() {
   const Review = this.constructor;
-  
+  const Service = mongoose.model('Service');
+  const User = mongoose.model('User');
+
   try {
-    // Calculate average rating for decorator
-    const stats = await Review.aggregate([
+    // Update service rating
+    const serviceStats = await Review.aggregate([
+      { $match: { serviceId: this.serviceId } },
+      {
+        $group: {
+          _id: '$serviceId',
+          averageRating: { $avg: '$rating' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    if (serviceStats.length > 0) {
+      await Service.findByIdAndUpdate(this.serviceId, {
+        'rating.average': Math.round(serviceStats[0].averageRating * 10) / 10,
+        'rating.count': serviceStats[0].count
+      });
+    }
+
+    // Update decorator rating
+    const decoratorStats = await Review.aggregate([
       { $match: { decoratorId: this.decoratorId } },
       {
         $group: {
           _id: '$decoratorId',
           averageRating: { $avg: '$rating' },
-          totalReviews: { $sum: 1 }
+          count: { $sum: 1 }
         }
       }
     ]);
-    
-    // Update decorator profile
-    if (stats.length > 0) {
-      await DecoratorProfile.findOneAndUpdate(
-        { userId: this.decoratorId },
-        {
-          rating: Math.round(stats[0].averageRating * 100) / 100,
-          totalJobs: stats[0].totalReviews
-        },
-        { upsert: true, new: true }
-      );
+
+    if (decoratorStats.length > 0) {
+      await User.findByIdAndUpdate(this.decoratorId, {
+        'rating.average': Math.round(decoratorStats[0].averageRating * 10) / 10,
+        'rating.count': decoratorStats[0].count,
+        totalJobs: decoratorStats[0].count
+      });
     }
   } catch (error) {
-    console.error('Error updating decorator rating:', error);
+    console.error('Error updating ratings:', error);
   }
 });
 
-const Review = mongoose.model('Review', reviewSchema);
-
-module.exports = Review;
+module.exports = mongoose.model('Review', ReviewSchema);
