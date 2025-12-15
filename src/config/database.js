@@ -1,33 +1,42 @@
 const mongoose = require('mongoose');
+const logger = require('../utils/logger');
 
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      // Mongoose 6+ no longer needs these options:
-      // useNewUrlParser: true,
-      // useUnifiedTopology: true,
+      useNewUrlParser: true,
+      useUnifiedTopology: true
     });
 
+    logger.info(`MongoDB Connected: ${conn.connection.host}`);
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-
+    
     // Handle connection events
     mongoose.connection.on('error', (err) => {
-      console.error('❌ MongoDB connection error:', err);
+      logger.error(`MongoDB connection error: ${err}`);
+      console.error(`❌ MongoDB connection error: ${err}`);
     });
 
     mongoose.connection.on('disconnected', () => {
-      console.warn('⚠️ MongoDB disconnected');
+      logger.warn('MongoDB disconnected');
+      console.warn('⚠️  MongoDB disconnected');
     });
 
-    // Graceful shutdown
+    mongoose.connection.on('reconnected', () => {
+      logger.info('MongoDB reconnected');
+      console.log('✅ MongoDB reconnected');
+    });
+
     process.on('SIGINT', async () => {
       await mongoose.connection.close();
-      console.log('MongoDB connection closed through app termination');
+      logger.info('MongoDB connection closed through app termination');
+      console.log('👋 MongoDB connection closed through app termination');
       process.exit(0);
     });
 
   } catch (error) {
-    console.error('❌ MongoDB connection failed:', error.message);
+    logger.error(`Error connecting to MongoDB: ${error.message}`);
+    console.error(`❌ Error connecting to MongoDB: ${error.message}`);
     process.exit(1);
   }
 };

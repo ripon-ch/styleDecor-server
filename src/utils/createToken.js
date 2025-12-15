@@ -1,11 +1,17 @@
-// src/utils/createToken.js
 const jwt = require('jsonwebtoken');
 
-function createToken(payload) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error('JWT_SECRET not set in .env');
-  const expiresIn = process.env.JWT_EXPIRES || '7d';
-  return jwt.sign(payload, secret, { expiresIn });
-}
+const createToken = (userId, expiresIn = process.env.JWT_EXPIRE || '7d') => {
+  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+    expiresIn
+  });
+};
 
-module.exports = createToken;
+const verifyToken = (token) => {
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    throw new Error('Invalid token');
+  }
+};
+
+module.exports = { createToken, verifyToken };

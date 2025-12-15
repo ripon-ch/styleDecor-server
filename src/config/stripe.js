@@ -1,9 +1,10 @@
-const Stripe = require('stripe');
+let stripe = null;
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.warn('⚠️ STRIPE_SECRET_KEY not found in environment variables');
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+  console.log('✅ Stripe initialized');
+} else {
+  console.log('⚠️  Stripe not configured. Payment features disabled.');
 }
-
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 module.exports = stripe;

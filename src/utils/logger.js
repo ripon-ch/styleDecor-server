@@ -1,16 +1,43 @@
-// src/utils/logger.js
-const { createLogger, format, transports } = require('winston');
+const winston = require('winston');
+const path = require('path');
+const fs = require('fs');
 
-const logger = createLogger({
-  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
-  format: format.combine(
-    format.timestamp(),
-    format.printf(({ timestamp, level, message, ...meta }) => {
-      const rest = Object.keys(meta).length ? JSON.stringify(meta) : '';
-      return `${timestamp} [${level}] ${message} ${rest}`;
-    })
+// Create logs directory if it doesn't exist
+const logsDir = path.join(__dirname, '../../logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
+const logger = winston.createLogger({
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  format: winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
   ),
-  transports: [new transports.Console()]
+  transports: [
+    new winston.transports.File({ 
+      filename: path.join(logsDir, 'error.log'), 
+      level: 'error',
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
+    }),
+    new winston.transports.File({ 
+      filename: path.join(logsDir, 'combined.log'),
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
+    })
+  ]
 });
+
+// Console logging in development
+if (process.env.NODE_ENV !== 'production') {
+  logger.add(new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.simple()
+    )
+  }));
+}
 
 module.exports = logger;
