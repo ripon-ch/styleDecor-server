@@ -1,70 +1,106 @@
-// src/middleware/auth.middleware.js
-const admin = require('../config/firebase'); // may be null
+const admin = require('../config/firebase');
 const User = require('../models/User');
-const createToken = require('../utils/createToken');
 const jwt = require('jsonwebtoken');
 
-async function verifyFirebase(req, res, next) {
+// Firebase authentication
+exports.authenticateFirebase = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization || '';
-    const idToken = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : (req.body && req.body.idToken ? req.body.idToken : null);
-    if (!idToken) return res.status(401).json({ message: 'No Firebase ID token provided' });
-    if (!admin) return res.status(500).json({ message: 'Firebase Admin not initialized on server' });
+    const token = req.headers.authorization?.split('Bearer ')[1];
 
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const firebaseUid = decoded.uid;
-    const email = decoded.email;
-    const name = decoded.name || decoded.email?.split('@')[0] || 'User';
-    const photoURL = decoded.picture || '';
-
-    let user = await User.findOne({ firebaseUid });
-    if (!user) user = await User.findOne({ email });
-
-    if (!user) {
-      user = await User.create({
-        firebaseUid, email, name, displayName: name, photoURL, isVerified: true
+    if (!token) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'No token provided' 
       });
-    } else {
-      let changed = false;
-      if (!user.firebaseUid) { user.firebaseUid = firebaseUid; changed = true; }
-      if (!user.name && name) { user.name = name; changed = true; }
-      if (!user.photoURL && photoURL) { user.photoURL = photoURL; changed = true; }
-      if (changed) await user.save();
     }
 
-    const payload = { id: user._id.toString(), email: user.email, role: user.role };
-    const serverToken = createToken(payload);
+    if (!admin) {
+      return res.status(500).json({
+        success: false,
+        message: 'Firebase authentication not configured'
+      });
+    }
+
+    // Verify Firebase token
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    
+    // Get or create user
+    let user = await User.findOne({ firebaseUid: decodedToken.uid });
+    
+    if (!user) {
+      // Create user if doesn't exist
+      user = await User.create({
+        firebaseUid: decodedToken.uid,
+        email: decodedToken.email,
+        fullName: decodedToken.name || decodedToken.email.split('@')[0],
+        isEmailVerified: decodedToken.email_verified || false,
+        avatarUrl: decodedToken.picture
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Account is inactive. Please contact support.' 
+      });
+    }
 
     req.user = user;
-    req.serverToken = serverToken;
-    res.setHeader('x-server-token', serverToken);
-
     next();
-  } catch (err) {
-    console.error('verifyFirebase error:', err && err.message ? err.message : err);
-    return res.status(401).json({ message: 'Invalid Firebase ID token' });
+  } catch (error) {
+    console.error('Firebase auth error:', error);
+    return res.status(401).json({ 
+      success: false,
+      message: 'Invalid or expired token' 
+    });
   }
-}
+};
 
-async function verifyJWT(req, res, next) {
+// JWT authentication (default)
+exports.authenticateJWT = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : (req.headers['x-server-token'] || null);
-    if (!token) return res.status(401).json({ message: 'No server token provided' });
+    const token = req.headers.authorization?.split('Bearer ')[1];
 
-    const secret = process.env.JWT_SECRET;
-    if (!secret) return res.status(500).json({ message: 'JWT_SECRET not set on server' });
+    if (!token) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'No token provided' 
+      });
+    }
 
-    const decoded = jwt.verify(token, secret);
-    const user = await User.findById(decoded.id);
-    if (!user) return res.status(401).json({ message: 'User not found' });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'User not found or inactive' 
+      });
+    }
 
     req.user = user;
     next();
-  } catch (err) {
-    console.error('verifyJWT error:', err && err.message ? err.message : err);
-    return res.status(401).json({ message: 'Invalid server token' });
+  } catch (error) {
+    return res.status(401).json({ 
+      success: false,
+      message: 'Invalid or expired token' 
+    });
   }
-}
+};
 
-module.exports = { verifyFirebase, verifyJWT };
+// Optional authentication (doesn't fail if no token)
+exports.optionalAuth = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split('Bearer ')[1];
+    
+    if (token) {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.userId);
+    }
+    
+    next();
+  } catch (error) {
+    // Continue without user
+    next();
+  }
+};
