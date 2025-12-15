@@ -1,44 +1,54 @@
-const mongoose = require('mongoose');
-const logger = require('../utils/logger');
+import mongoose from 'mongoose';
+import logger from '../utils/logger.js'; // Ensure path and .js extension are correct
+
+const MONGO_URI = process.env.MONGO_URI; 
 
 const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
+    // MongoDB connection options (leaving them commented out is fine as they are deprecated/defaulted)
+    const options = {}; 
 
-    logger.info(`MongoDB Connected: ${conn.connection.host}`);
-    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-    
-    // Handle connection events
-    mongoose.connection.on('error', (err) => {
-      logger.error(`MongoDB connection error: ${err}`);
-      console.error(`❌ MongoDB connection error: ${err}`);
-    });
+    try {
+        if (!MONGO_URI) {
+            throw new Error('MONGO_URI is not defined in environment variables.');
+        }
 
-    mongoose.connection.on('disconnected', () => {
-      logger.warn('MongoDB disconnected');
-      console.warn('⚠️  MongoDB disconnected');
-    });
+        const conn = await mongoose.connect(MONGO_URI, options);
 
-    mongoose.connection.on('reconnected', () => {
-      logger.info('MongoDB reconnected');
-      console.log('✅ MongoDB reconnected');
-    });
+        logger.info(`MongoDB Connected: ${conn.connection.host}`);
+        console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+        
+        // --- Connection Event Listeners ---
+        
+        mongoose.connection.on('error', (err) => {
+            logger.error(`MongoDB connection error: ${err.message}`);
+            console.error(`❌ MongoDB connection error: ${err.message}`);
+        });
 
-    process.on('SIGINT', async () => {
-      await mongoose.connection.close();
-      logger.info('MongoDB connection closed through app termination');
-      console.log('👋 MongoDB connection closed through app termination');
-      process.exit(0);
-    });
+        mongoose.connection.on('disconnected', () => {
+            logger.warn('MongoDB disconnected');
+            console.warn('⚠️  MongoDB disconnected');
+        });
 
-  } catch (error) {
-    logger.error(`Error connecting to MongoDB: ${error.message}`);
-    console.error(`❌ Error connecting to MongoDB: ${error.message}`);
-    process.exit(1);
-  }
+        mongoose.connection.on('reconnected', () => {
+            logger.info('MongoDB reconnected');
+            console.log('✅ MongoDB reconnected');
+        });
+
+        // Add the Graceful Shutdown Handler: Closes the connection on app termination (SIGINT, e.g., Ctrl+C)
+        process.on('SIGINT', async () => {
+            await mongoose.connection.close();
+            logger.info('MongoDB connection closed through app termination');
+            console.log('👋 MongoDB connection closed through app termination');
+            // Allow the process to exit after closing the database connection
+            process.exit(0); 
+        });
+
+    } catch (error) {
+        logger.error(`Error connecting to MongoDB: ${error.message}`);
+        console.error(`❌ Error connecting to MongoDB: ${error.message}`);
+        // Exit process immediately on failed database connection
+        process.exit(1);
+    }
 };
 
-module.exports = connectDB;
+export default connectDB;
