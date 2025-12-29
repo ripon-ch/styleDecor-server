@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+
 const {
   getAllServices,
   getServiceById,
@@ -8,18 +9,19 @@ const {
   deleteService,
   getRecommendedServices
 } = require('../controllers/service.controller');
-const { authenticateJWT, optionalAuth } = require('../middleware/auth.middleware');
+
+// Use 'protect' from your auth middleware
+const { protect } = require('../middleware/auth.middleware');
 const { authorize } = require('../middleware/role.middleware');
-const { validateService, validateObjectId, validate } = require('../middleware/validation.middleware');
 
 // Public routes
 router.get('/', getAllServices);
-router.get('/recommended', authenticateJWT, getRecommendedServices);
-router.get('/:id', validateObjectId, validate, getServiceById);
+router.get('/recommended', protect, getRecommendedServices); // Line 22 - now fixed
+router.get('/:id', getServiceById);
 
 // Protected routes
-router.post('/', authenticateJWT, authorize('admin', 'decorator'), validateService, validate, createService);
-router.put('/:id', authenticateJWT, authorize('admin', 'decorator'), validateObjectId, validate, updateService);
-router.delete('/:id', authenticateJWT, authorize('admin'), validateObjectId, validate, deleteService);
+router.post('/', protect, authorize('admin', 'decorator'), createService);
+router.put('/:id', protect, authorize('admin', 'decorator'), updateService);
+router.delete('/:id', protect, authorize('admin'), deleteService);
 
 module.exports = router;

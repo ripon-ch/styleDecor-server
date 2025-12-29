@@ -4,7 +4,8 @@ const ServiceSchema = new mongoose.Schema({
   serviceName: {
     type: String,
     required: [true, 'Service name is required'],
-    trim: true
+    trim: true,
+    index: true // Better for regex searching "Sofa Decor" -> "Sofa"
   },
   description: {
     type: String,
@@ -23,55 +24,41 @@ const ServiceSchema = new mongoose.Schema({
   serviceCategory: {
     type: String,
     required: [true, 'Category is required'],
-    enum: ['home', 'wedding', 'office', 'event', 'outdoor']
+    enum: ['home', 'wedding', 'office', 'event', 'outdoor'],
+    lowercase: true // Normalizes data for filters
   },
   isActive: {
     type: Boolean,
     default: true
   },
   images: [{
-    imageUrl: {
-      type: String,
-      required: true
-    },
-    altText: {
-      type: String,
-      required: true
-    },
-    isPrimary: {
-      type: Boolean,
-      default: false
-    },
-    displayOrder: {
-      type: Number,
-      default: 0
-    },
-    publicId: String
+    imageUrl: String,
+    altText: String,
+    isPrimary: { type: Boolean, default: false }
   }],
   features: [String],
   rating: {
     average: { type: Number, default: 0, min: 0, max: 5 },
     count: { type: Number, default: 0 }
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+  createdByEmail: {
+    type: String,
+    required: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true }, // Allows the primary image helper to show up
+  toObject: { virtuals: true }
 });
 
-// Indexes
-ServiceSchema.index({ serviceCategory: 1, isActive: 1 });
-ServiceSchema.index({ cost: 1 });
+// For Search Functionality Requirement (Text index + regular index)
 ServiceSchema.index({ serviceName: 'text', description: 'text' });
+ServiceSchema.index({ serviceCategory: 1, cost: 1 }); // Optimized for "Filter by Category & Price"
+
+// Virtual: Get the primary image easily
+ServiceSchema.virtual('primaryImage').get(function() {
+  const primary = this.images.find(img => img.isPrimary);
+  return primary ? primary.imageUrl : (this.images[0]?.imageUrl || null);
+});
 
 module.exports = mongoose.model('Service', ServiceSchema);

@@ -1,25 +1,20 @@
 require("dotenv").config();
-const connectDB = require("../config/database"); // CommonJS path
+const connectDB = require("../config/database");
 const User = require("../models/User");
 const Service = require("../models/Service");
-const bcrypt = require("bcryptjs");
 
 const seedData = async () => {
     try {
         await connectDB();
 
-        console.log("🗑️  Clearing existing data...");
+        console.log("🗑️ Clearing existing data...");
         await User.deleteMany({});
         await Service.deleteMany({});
-        console.log("✅ Deleted existing data");
 
-        // Helper to hash passwords
-        const hashPassword = password => bcrypt.hashSync(password, 10);
-
-        // Admin
-        const admin = await User.create({
+        // ADMIN
+        await User.create({
+            firebaseUid: "Nqd6V4UnhGWGeLinwlIvtG12qW32", // Get from Firebase Console
             email: "admin@styledecor.com",
-            password: "admin123",
             fullName: "Admin User",
             role: "admin",
             phone: "+8801712345678",
@@ -27,11 +22,11 @@ const seedData = async () => {
             isEmailVerified: true
         });
 
-        // Decorators
+        // DECORATORS
         await User.create([
             {
+                firebaseUid: "aGRvcLbPwZRo3x7oxzKZZ2WddqB3",
                 email: "decorator1@styledecor.com",
-                password: "decorator123",
                 fullName: "Fatima Rahman",
                 role: "decorator",
                 phone: "+8801812345678",
@@ -41,27 +36,29 @@ const seedData = async () => {
                 rating: { average: 4.8, count: 25 },
                 totalJobs: 25,
                 address: { district: "Dhaka", thana: "Gulshan" }
-            },
+            }
+        ]);
+        await User.create([
             {
-                email: "decorator2@styledecor.com",
-                password: "decorator123",
-                fullName: "Ahmed Hassan",
+                firebaseUid: "XvUi1KQOS3M351kFepE6wsDV5002",
+                email: "decorator@styledecor.com",
+                fullName: "Fazlur Rahman",
                 role: "decorator",
-                phone: "+8801912345678",
-                bio: "Specializing in corporate events and office spaces",
-                experienceYears: 5,
+                phone: "+8801812365678",
+                bio: "Experienced wedding decorator with 8 years in the industry",
+                experienceYears: 8,
                 isVerified: true,
-                rating: { average: 4.6, count: 18 },
-                totalJobs: 18,
+                rating: { average: 4.9, count: 25 },
+                totalJobs: 25,
                 address: { district: "Dhaka", thana: "Banani" }
             }
         ]);
 
-        // Customers
+        // CUSTOMERS
         await User.create([
             {
+                firebaseUid: "Q77YQA5PpJUVZV9DY2s2HaXUJpc2",
                 email: "customer1@styledecor.com",
-                password: ("customer123"),
                 fullName: "Sarah Ahmed",
                 role: "customer",
                 phone: "+8801612345678",
@@ -72,14 +69,22 @@ const seedData = async () => {
                 }
             }
         ]);
+        await User.create([
+            {
+                firebaseUid: "s5gMtXw25sM511Yury124NgZUx12",
+                email: "customer@styledecor.com",
+                fullName: "Nabil Ahmed",
+                role: "customer",
+                phone: "+8801612345578",
+                address: {
+                    street: "123 Main Street",
+                    district: "Dhaka",
+                    thana: "Gulshan"
+                }
+            }
+        ]);
 
         console.log("✅ Seed data created successfully!");
-        console.log("📧 Login Credentials:");
-        console.log("Admin: admin@styledecor.com / admin123");
-        console.log("Decorator1: decorator1@styledecor.com / decorator123");
-        console.log("Decorator2: decorator2@styledecor.com / decorator123");
-        console.log("Customer: customer1@styledecor.com / customer123");
-
         process.exit(0);
     } catch (error) {
         console.error("❌ Error seeding data:", error);

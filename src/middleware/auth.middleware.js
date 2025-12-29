@@ -1,106 +1,60 @@
 const admin = require('../config/firebase');
 const User = require('../models/User');
-const jwt = require('jsonwebtoken');
 
-// Firebase authentication
-exports.authenticateFirebase = async (req, res, next) => {
+/**
+ * Protect: Blocks request if token is missing/invalid
+ */
+exports.protect = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.split('Bearer ')[1];
-
-    if (!token) {
-      return res.status(401).json({ 
-        success: false,
-        message: 'No token provided' 
-      });
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
     }
 
-    if (!admin) {
-      return res.status(500).json({
-        success: false,
-        message: 'Firebase authentication not configured'
-      });
-    }
-
-    // Verify Firebase token
+    const token = authHeader.split('Bearer ')[1];
     const decodedToken = await admin.auth().verifyIdToken(token);
-    
-    // Get or create user
+
     let user = await User.findOne({ firebaseUid: decodedToken.uid });
-    
+
+    // Auto-Sync for Social Login
     if (!user) {
-      // Create user if doesn't exist
+      // Logic: If email is your specific admin email, make them admin
+      const isAdmin = decodedToken.email === 'admin@styledecor.com'; 
+      
       user = await User.create({
         firebaseUid: decodedToken.uid,
         email: decodedToken.email,
         fullName: decodedToken.name || decodedToken.email.split('@')[0],
-        isEmailVerified: decodedToken.email_verified || false,
-        avatarUrl: decodedToken.picture
+        role: isAdmin ? 'admin' : 'customer',
+        isActive: true
       });
     }
 
     if (!user.isActive) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Account is inactive. Please contact support.' 
-      });
+      return res.status(403).json({ success: false, message: 'Account deactivated' });
     }
 
     req.user = user;
     next();
   } catch (error) {
-    console.error('Firebase auth error:', error);
-    return res.status(401).json({ 
-      success: false,
-      message: 'Invalid or expired token' 
-    });
+    console.error('Protect Middleware Error:', error.message);
+    res.status(401).json({ success: false, message: 'Authentication failed' });
   }
 };
 
-// JWT authentication (default)
-exports.authenticateJWT = async (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.split('Bearer ')[1];
-
-    if (!token) {
-      return res.status(401).json({ 
-        success: false,
-        message: 'No token provided' 
-      });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
-
-    if (!user || !user.isActive) {
-      return res.status(401).json({ 
-        success: false,
-        message: 'User not found or inactive' 
-      });
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
-    return res.status(401).json({ 
-      success: false,
-      message: 'Invalid or expired token' 
-    });
-  }
-};
-
-// Optional authentication (doesn't fail if no token)
+/**
+ * OptionalAuth: Allows request to pass through even without a token
+ */
 exports.optionalAuth = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.split('Bearer ')[1];
-    
-    if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(decoded.userId);
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split('Bearer ')[1];
+      const decodedToken = await admin.auth().verifyIdToken(token);
+      req.user = await User.findOne({ firebaseUid: decodedToken.uid });
     }
-    
     next();
   } catch (error) {
-    // Continue without user
-    next();
+    next(); // Just continue without req.user
   }
 };

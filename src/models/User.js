@@ -5,7 +5,7 @@ const UserSchema = new mongoose.Schema({
   firebaseUid: {
     type: String,
     unique: true,
-    sparse: true,
+    sparse: true, // Allows null for users not using Firebase (if any)
     index: true
   },
   email: {
@@ -19,7 +19,7 @@ const UserSchema = new mongoose.Schema({
   password: {
     type: String,
     minlength: [6, 'Password must be at least 6 characters'],
-    select: false
+    select: false // Doesn't return password in queries by default
   },
   fullName: {
     type: String,
@@ -54,6 +54,7 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Decorator Specific Fields
   bio: {
     type: String,
     maxlength: 1000
@@ -63,7 +64,7 @@ const UserSchema = new mongoose.Schema({
     min: 0,
     default: 0
   },
-  isVerified: {
+  isVerified: { // Admin verification for decorators
     type: Boolean,
     default: false
   },
@@ -78,45 +79,34 @@ const UserSchema = new mongoose.Schema({
   refreshToken: {
     type: String,
     select: false
-  },
-  passwordResetToken: String,
-  passwordResetExpires: Date,
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   }
 }, {
-  timestamps: true
+  // This automatically handles createdAt and updatedAt
+  timestamps: true 
 });
 
-// Indexes
+// Optimized Indexes for performance
 UserSchema.index({ email: 1, role: 1 });
 UserSchema.index({ firebaseUid: 1 });
 UserSchema.index({ 'address.district': 1 });
 
-// Hash password before saving
+// Hash password before saving (Only if password exists and is modified)
 UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   
-  if (this.password) {
-    this.password = await bcrypt.hash(this.password, 10);
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (err) {
+    next(err);
   }
-  next();
 });
 
 // Compare password method
 UserSchema.methods.comparePassword = async function(candidatePassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
-
-// Update timestamp
-UserSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
 
 module.exports = mongoose.model('User', UserSchema);

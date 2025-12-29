@@ -41,59 +41,68 @@ const ReviewSchema = new mongoose.Schema({
   timestamps: false
 });
 
-// Indexes
+// Indexes for high-performance searching
 ReviewSchema.index({ bookingId: 1 }, { unique: true });
 ReviewSchema.index({ serviceId: 1, rating: -1 });
 ReviewSchema.index({ decoratorId: 1 });
 
-// Update service and decorator ratings after review is saved
-ReviewSchema.post('save', async function() {
-  const Review = this.constructor;
+/**
+ * Static method to calculate and update ratings
+ * This is cleaner than keeping logic inside the post-save hook
+ */
+ReviewSchema.statics.calculateRatings = async function(serviceId, decoratorId) {
   const Service = mongoose.model('Service');
   const User = mongoose.model('User');
 
-  try {
-    // Update service rating
-    const serviceStats = await Review.aggregate([
-      { $match: { serviceId: this.serviceId } },
-      {
-        $group: {
-          _id: '$serviceId',
-          averageRating: { $avg: '$rating' },
-          count: { $sum: 1 }
-        }
+  // 1. Calculate for Service
+  const serviceStats = await this.aggregate([
+    { $match: { serviceId: serviceId } },
+    {
+      $group: {
+        _id: '$serviceId',
+        avgRating: { $avg: '$rating' },
+        count: { $sum: 1 }
       }
-    ]);
-
-    if (serviceStats.length > 0) {
-      await Service.findByIdAndUpdate(this.serviceId, {
-        'rating.average': Math.round(serviceStats[0].averageRating * 10) / 10,
-        'rating.count': serviceStats[0].count
-      });
     }
+  ]);
 
-    // Update decorator rating
-    const decoratorStats = await Review.aggregate([
-      { $match: { decoratorId: this.decoratorId } },
-      {
-        $group: {
-          _id: '$decoratorId',
-          averageRating: { $avg: '$rating' },
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
-    if (decoratorStats.length > 0) {
-      await User.findByIdAndUpdate(this.decoratorId, {
-        'rating.average': Math.round(decoratorStats[0].averageRating * 10) / 10,
-        'rating.count': decoratorStats[0].count,
-        totalJobs: decoratorStats[0].count
-      });
-    }
-  } catch (error) {
-    console.error('Error updating ratings:', error);
+  if (serviceStats.length > 0) {
+    await Service.findByIdAndUpdate(serviceId, {
+      'rating.average': Math.round(serviceStats[0].avgRating * 10) / 10,
+      'rating.count': serviceStats[0].count
+    });
   }
+
+  // 2. Calculate for Decorator (User model)
+  const decoratorStats = await this.aggregate([
+    { $match: { decoratorId: decoratorId } },
+    {
+      $group: {
+        _id: '$decoratorId',
+        avgRating: { $avg: '$rating' },
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  if (decoratorStats.length > 0) {
+    await User.findByIdAndUpdate(decoratorId, {
+      'rating.average': Math.round(decoratorStats[0].avgRating * 10) / 10,
+      'rating.count': decoratorStats[0].count,
+      totalJobs: decoratorStats[0].count
+    });
+  }
+};
+
+// Hook to trigger calculation after a review is saved
+ReviewSchema.post('save', function() {
+  // Use the static method defined above
+  this.constructor.calculateRatings(this.serviceId, this.decoratorId);
+});
+
+// Also trigger if a review is removed/deleted
+ReviewSchema.post('remove', function() {
+  this.constructor.calculateRatings(this.serviceId, this.decoratorId);
 });
 
 module.exports = mongoose.model('Review', ReviewSchema);
